@@ -14,5 +14,5 @@ cp "${PWD}/assets/keepalived.conf" /tmp/
 export CONFIG="/tmp/keepalived.conf"
 export EXPECTED="${PWD}/tests/ka.conf.result"
 
-bash ${PWD}/assets/entrypoint.sh 2> /dev/null || echo "Entrypoint script finished!"
-cmp --silent $EXPECTED $CONFIG && echo "Entrypoint replacement verified."
+bash "${PWD}/assets/entrypoint.sh" 2> /dev/null || echo "Entrypoint script finished!"
+cmp --silent "$EXPECTED" $CONFIG && echo "Entrypoint replacement verified."

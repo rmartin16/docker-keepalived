@@ -1,7 +1,7 @@
 FROM multiarch/alpine:armhf-latest-stable AS builder
-LABEL maintainer "Ruben J. Jongejan - ruben.jongejan@gmail.com"
+LABEL maintainer = "Russell Martin - github/rmartin16"
 
-ARG KEEPALIVED_VERSION=2.0.20
+ARG KEEPALIVED_VERSION=2.2.7
 
 RUN apk --no-cache add \
        autoconf \
@@ -24,7 +24,8 @@ RUN apk --no-cache add \
     && tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived \
     && cd /build/keepalived \
     && ./configure --disable-dynamic-linking \
-    && make && make install
+    && make -j$(nproc) \
+    && make install
 
 FROM multiarch/alpine:armhf-latest-stable
 RUN apk --no-cache add \
@@ -34,8 +35,8 @@ RUN apk --no-cache add \
        libnfnetlink \
        libnl3 \
        libgcc \
-       openssl && \
-       adduser keepalived_script -D
+       openssl \
+    && adduser keepalived_script -D
 COPY --from=builder /usr/local/sbin/keepalived /usr/local/sbin/keepalived
 COPY assets/keepalived.conf /etc/keepalived/keepalived.conf
 COPY assets/notify.sh /notify.sh
