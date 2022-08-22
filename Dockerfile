@@ -1,7 +1,7 @@
 FROM multiarch/alpine:armhf-latest-stable AS builder
-LABEL maintainer "Ruben J. Jongejan - ruben.jongejan@gmail.com"
+LABEL maintainer "Russell Martin"
 
-ARG KEEPALIVED_VERSION=2.0.20
+ARG KEEPALIVED_VERSION=2.2.7
 
 RUN apk --no-cache add \
        autoconf \
