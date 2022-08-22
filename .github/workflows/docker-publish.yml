@@ -3,6 +3,7 @@ name: Docker Publish
 on:
   schedule:
     - cron: '16 1 * * TUE'
+    #- cron: '0,15,30,45 * * * *'
   release:
     types:
       - published
@@ -64,6 +65,7 @@ jobs:
             latest=auto
           tags: |
             type=schedule,pattern=weekly
+            type=schedule,pattern=weekly-{{date 'YYYYMMDD'}}
             type=ref,event=tag
 
       # Build and push Docker image with Buildx (don't push on PR)
