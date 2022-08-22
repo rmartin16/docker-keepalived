@@ -31,4 +31,8 @@ Example:
 ## Sources
 [Oracle Linux Administrator's Guide](https://docs.oracle.com/cd/E37670_01/E41138/html/ol6-loadbal.html)
 
+Direct parent:
+[rvben/rpi-keepalived](https://github.com/rvben/rpi-keepalived)
+
+Transitive parent:
 [osixia/docker-keepalived](https://github.com/osixia/docker-keepalived)
