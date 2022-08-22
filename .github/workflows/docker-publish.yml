@@ -2,7 +2,8 @@ name: Docker Publish
 
 on:
   schedule:
-    - cron: '0,30 * * * *'
+    - cron: '15,45 * * * *'
+    #- cron: '16 1 * * SUN'
   release:
     types:
       - published
@@ -61,7 +62,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=true
             type=semver,pattern={{version}}
             type=ref,event=tag
             type=schedule,pattern=nightly
