@@ -1,6 +1,6 @@
 .PHONY: build test dgoss
-DOCKER_USER = rvben
-DOCKER_NAME = rvben/rpi-keepalived
+DOCKER_USER = rmartin16
+DOCKER_NAME = rmartin16/rpi-keepalived
 VERSION := $(shell cat Dockerfile | grep -oP 'KEEPALIVED_VERSION=(.*)' | grep -oP '\d.\d.\d')
 build:
 	docker run --rm --privileged multiarch/qemu-user-static:register --reset
