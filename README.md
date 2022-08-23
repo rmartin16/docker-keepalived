@@ -2,7 +2,7 @@
 RPi-compatible Docker image with Keepalived
 
 ## Quick start
-    docker run --name keepalived --cap-add=NET_ADMIN --net=host -d rvben/rpi-keepalived
+    docker run --name keepalived --cap-add=NET_ADMIN --net=host -d ghcr.io/rmartin16/rpi-keepalived:weekly
 
 ## Environment Variables
 
@@ -10,7 +10,7 @@ The configuration can be set using environment variables:
 
     docker run \
     -e INTERFACE=eth1 \
-    --name keepalived --cap-add=NET_ADMIN --net=host -d rvben/rpi-keepalived
+    --name keepalived --cap-add=NET_ADMIN --net=host -d ghcr.io/rmartin16/rpi-keepalived:weekly
 
 - **INTERFACE**: Defaults to `eth0`
 - **STATE**: Default state. Defaults to `BACKUP`
@@ -26,7 +26,7 @@ Example:
 
     docker run --name keepalived --cap-add=NET_ADMIN --net=host \
     -v $(pwd)/keepalived.conf:/etc/keepalived/keepalived.conf \
-    -d rvben/rpi-keepalived
+    -d ghcr.io/rmartin16/rpi-keepalived:weekly
 
 ## Sources
 [Oracle Linux Administrator's Guide](https://docs.oracle.com/cd/E37670_01/E41138/html/ol6-loadbal.html)
