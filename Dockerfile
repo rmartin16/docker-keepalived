@@ -1,43 +1,69 @@
-FROM multiarch/alpine:armhf-latest-stable AS builder
-LABEL maintainer = "Russell Martin - github/rmartin16"
+FROM alpine AS builder
+LABEL maintainer = "Russell Martin - github/rmartin16/docker-keepalived"
 
 ARG KEEPALIVED_VERSION=2.2.7
 
 RUN apk --no-cache add \
        autoconf \
+       automake \
+       binutils \
        curl \
+       file \
+       file-dev \
        gcc \
        ipset \
        ipset-dev \
        iptables \
        iptables-dev \
-       libnfnetlink \
-       libnfnetlink-dev \
+       libmnl-dev \
+       libnftnl-dev \
        libnl3 \
        libnl3-dev \
        make \
        musl-dev \
+       net-snmp-dev \
        openssl \
        openssl-dev \
-    && curl -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz \
+       pcre2 \
+       pcre2-dev \
+    && curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz \
     && mkdir -p /build/keepalived \
     && tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived \
     && cd /build/keepalived \
-    && ./configure --disable-dynamic-linking \
-    && make -j$(nproc) \
-    && make install
+    && ./configure \
+      MKDIR_P='/bin/mkdir -p'  \
+      --disable-dynamic-linking \
+      --enable-bfd \
+      --enable-json \
+      --enable-nftables \
+      --enable-snmp \
+      --enable-snmp-rfc \
+      --enable-regex \
+      --prefix=/usr \
+      --exec-prefix=/usr \
+      --bindir=/usr/bin \
+      --sbindir=/usr/sbin \
+      --sysconfdir=/etc \
+      --datadir=/usr/share \
+      --localstatedir=/var \
+      --mandir=/usr/share/man \
+    && make && make install \
+    && strip /usr/sbin/keepalived
 
-FROM multiarch/alpine:armhf-latest-stable
+FROM alpine
 RUN apk --no-cache add \
-       bash \
+       file \
        ipset \
        iptables \
-       libnfnetlink \
+       libmagic \
        libnl3 \
        libgcc \
+       net-snmp \
        openssl \
-    && adduser keepalived_script -D
-COPY --from=builder /usr/local/sbin/keepalived /usr/local/sbin/keepalived
+       pcre2 \
+    && addgroup -S keepalived_script \
+    && adduser -D -S -G keepalived_script keepalived_script
+COPY --from=builder /usr/sbin/keepalived /usr/sbin/keepalived
 COPY assets/keepalived.conf /etc/keepalived/keepalived.conf
 COPY assets/notify.sh /notify.sh
 COPY assets/entrypoint.sh /entrypoint.sh
@@ -51,4 +77,4 @@ ENV VIRTUAL_IPS="192.168.2.100/24"
 ENV PASSWORD="KeptAliv"
 ENV NOTIFY="/notify.sh"
 
-CMD ["bash", "-x", "entrypoint.sh"]
+CMD ["/bin/sh", "-x", "entrypoint.sh"]
