@@ -17,7 +17,7 @@ file:
     group: root
     filetype: file
     contains: []
-  /usr/local/sbin/keepalived:
+  /usr/sbin/keepalived:
     exists: true
     mode: "0755"
     owner: root
