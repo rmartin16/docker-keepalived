@@ -2,9 +2,7 @@ FROM alpine AS builder
 LABEL maintainer = "Russell Martin - github/rmartin16/docker-keepalived"
 LABEL description = "multiarch keepalived"
 
-ARG KEEPALIVED_VERSION=2.2.7
-
-RUN apk --no-cache add \
+RUN apk --update-cache add \
        autoconf \
        automake \
        binutils \
@@ -26,13 +24,16 @@ RUN apk --no-cache add \
        openssl \
        openssl-dev \
        pcre2 \
-       pcre2-dev \
-    && curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz \
-    && mkdir -p /build/keepalived \
-    && tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived \
-    && cd /build/keepalived \
-    && ./configure \
-      MKDIR_P='/bin/mkdir -p'  \
+       pcre2-dev
+
+ARG KEEPALIVED_VERSION=2.2.7
+RUN curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz && \
+    mkdir -p /build/keepalived && \
+    tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived
+
+RUN cd /build/keepalived && \
+    ./configure \
+      MKDIR_P='/bin/mkdir -p' \
       --disable-dynamic-linking \
       --enable-bfd \
       --enable-json \
@@ -47,9 +48,9 @@ RUN apk --no-cache add \
       --sysconfdir=/etc \
       --datadir=/usr/share \
       --localstatedir=/var \
-      --mandir=/usr/share/man \
-    && make && make install \
-    && strip /usr/sbin/keepalived
+      --mandir=/usr/share/man && \
+    make && make install && \
+    strip /usr/sbin/keepalived
 
 FROM alpine
 RUN apk --no-cache add \
@@ -61,21 +62,23 @@ RUN apk --no-cache add \
        libgcc \
        net-snmp \
        openssl \
-       pcre2 \
-    && addgroup -S keepalived_script \
-    && adduser -D -S -G keepalived_script keepalived_script
+       pcre2
+
+RUN addgroup -S keepalived_script && \
+    adduser -D -S -G keepalived_script keepalived_script
+
 COPY --from=builder /usr/sbin/keepalived /usr/sbin/keepalived
 COPY assets/keepalived.conf /etc/keepalived/keepalived.conf
 COPY assets/notify.sh /notify.sh
 COPY assets/entrypoint.sh /entrypoint.sh
 
-ENV INTERFACE="eth0"
-ENV STATE="BACKUP"
-ENV ROUTER_ID="41"
-ENV PRIORITY="100"
-ENV UNICAST_PEERS="192.168.2.101 192.168.2.102 192.168.2.103"
-ENV VIRTUAL_IPS="192.168.2.100/24"
-ENV PASSWORD="KeptAliv"
-ENV NOTIFY="/notify.sh"
+ENV INTERFACE="eth0" \
+    STATE="BACKUP" \
+    ROUTER_ID="41" \
+    PRIORITY="100" \
+    UNICAST_PEERS="192.168.2.101 192.168.2.102 192.168.2.103" \
+    VIRTUAL_IPS="192.168.2.100/24" \
+    PASSWORD="KeptAliv" \
+    NOTIFY="/notify.sh"
 
 CMD ["/bin/sh", "-x", "entrypoint.sh"]
