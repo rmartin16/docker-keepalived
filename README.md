@@ -1,5 +1,5 @@
 # docker-keepalived
-[Keepalived](https://github.com/acassen/keepalived) docker image for `amd64`, `i386`, `arm64`, `arm/v6`, `arm/v7`.
+[Keepalived](https://github.com/acassen/keepalived) Docker image for `amd64`, `i386`, `arm64`, `armv6`, `armv7`.
 
 ## Quick start
     docker run \
