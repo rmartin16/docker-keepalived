@@ -7,7 +7,7 @@
         --cap-add=NET_ADMIN \
         --net=host \
         --detach \
-        ghcr.io/rmartin16/keepalived:weekly
+        ghcr.io/rmartin16/keepalived:v2.2.7
 
 ## Environment Variables
 
@@ -20,7 +20,7 @@ The configuration can be set using environment variables:
         --cap-add=NET_ADMIN \
         --net=host \
         --detach \
-        ghcr.io/rmartin16/keepalived:weekly
+        ghcr.io/rmartin16/keepalived:v2.2.7
 
 - **INTERFACE**: Defaults to `eth0`
 - **STATE**: Default state. Defaults to `BACKUP`
@@ -40,7 +40,7 @@ Example:
         --net=host \
         --volume $(pwd)/keepalived.conf:/etc/keepalived/keepalived.conf \
         --detach \
-        ghcr.io/rmartin16/keepalived:weekly
+        ghcr.io/rmartin16/keepalived:v2.2.7
 
 ## docker-compose
     
@@ -48,7 +48,7 @@ Example:
     services:
       keepalived:
         container_name: keepalived
-        image: ghcr.io/rmartin16/keepalived:weekly
+        image: ghcr.io/rmartin16/keepalived:v2.2.7
         network_mode: host
         cap_add:
           - NET_ADMIN

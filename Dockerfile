@@ -31,10 +31,12 @@ RUN curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-$
     mkdir -p /build/keepalived && \
     tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived
 
-RUN cd /build/keepalived && \
+WORKDIR /build/keepalived
+RUN ./build_setup && \
     ./configure \
       MKDIR_P='/bin/mkdir -p' \
       --disable-dynamic-linking \
+      --disable-dependency-tracking \
       --enable-bfd \
       --enable-json \
       --enable-nftables \
@@ -62,9 +64,8 @@ RUN apk --no-cache add \
        libgcc \
        net-snmp \
        openssl \
-       pcre2
-
-RUN addgroup -S keepalived_script && \
+       pcre2 && \
+    addgroup -S keepalived_script && \
     adduser -D -S -G keepalived_script keepalived_script
 
 COPY --from=builder /usr/sbin/keepalived /usr/sbin/keepalived
