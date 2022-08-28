@@ -26,22 +26,63 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
       - name: Test
         run: make test
-
       - name: Build
         run: make build
-
       - name: Verify
         run: make dgoss
 
+  Setup:
+    runs-on: ubuntu-latest
+    needs: [Tests]
+    outputs:
+      date: ${{ steps.set-date.outputs.date }}
+      versions: ${{ steps.set-keepalived-versions.outputs.versions }}
+      latest-version: ${{ steps.set-keepalived-versions.outputs.latest-version }}
+    steps:
+      - name: Declare Date
+        id: set-date
+        run: echo "::set-output name=date::$(date +'%Y%m%d')"
+
+      - name: Declare keepalived Versions
+        id: set-keepalived-versions
+        run: |  # find version 2.2+
+          VERS=$( \
+            git -c 'versionsort.suffix=-' ls-remote --tags --sort='v:refname' https://github.com/acassen/keepalived.git | \
+            cut --delimiter='/' --fields=3 | \
+            grep -v "\^{}" | \
+            cut --delimiter='-' --fields=2 | \
+            grep '^v2\.[2-9]\.\d*.' | \
+            sed 's/v//g'
+          )
+          
+          LATEST_VER=$(echo ${VERS} | rev | cut -d' ' -f1 | rev)
+          echo "Latest: ${LATEST_VER}"
+          echo "::set-output name=latest-version::${LATEST_VER}"
+          
+          VERS_MATRIX_LIST=$(echo ${VERS} | sed -z 's/ /","/g;s/,$/\n/')
+          VERS_MATRIX_LIST="[\"${VERS_MATRIX_LIST}\"]"
+          echo ${VERS_MATRIX_LIST}
+          echo "::set-output name=versions::${VERS_MATRIX_LIST}"
+
   Publish:
     runs-on: ubuntu-latest
-    needs: Tests
+    needs: [Tests,Setup]
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION: ${{ fromJson(needs.Setup.outputs.versions) }}
+        exclude:
+          - VERSION: 2.2.0  # different build requirements
+          - VERSION: 2.2.1  # different build requirements
+          - VERSION: 2.2.2  # different build requirements
+          - VERSION: 2.2.5  # not actually released
+          - VERSION: 2.2.6  # not actually released
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -66,11 +107,16 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
-            latest=auto
+            latest=false
+          labels: |
+            maintainer=${{ github.repository_owner }}
+            org.opencontainers.image.title=keepalived
+            org.opencontainers.image.description=keepalived v${{ matrix.VERSION }} (${{ needs.Setup.outputs.date }})
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
           tags: |
-            type=schedule,pattern=weekly
-            type=schedule,pattern=weekly-{{date 'YYYYMMDD'}}
-            type=ref,event=tag
+            type=raw,value=v${{ matrix.VERSION }}
+            type=raw,value=v${{ matrix.VERSION }}-${{ needs.Setup.outputs.date }}
+            type=raw,value=latest,enable=${{ matrix.VERSION == needs.Setup.outputs.latest-version }}
             type=ref,event=pr
 
       - name: Build and push Docker image
@@ -78,11 +124,17 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          push: ${{ (steps.meta.outputs.tags != '') || (env.FORCE_PUBLISH == 'true') }}
+          push: ${{ (github.event_name != 'pull_request') || (env.FORCE_PUBLISH == 'true') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/386,linux/arm64/v8,linux/arm/v7,linux/arm/v6
-          build-args: KEEPALIVED_VERSION=2.2.7
+          build-args: KEEPALIVED_VERSION=${{ matrix.VERSION }}
+
+      - name: Verify image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker pull ${REGISTRY}/${IMAGE_NAME}:v${{ matrix.VERSION }}-${{ needs.Setup.outputs.date }}
+          docker image inspect ${REGISTRY}/${IMAGE_NAME}:v${{ matrix.VERSION }}-${{ needs.Setup.outputs.date }}
 
       - name: Send mail
         if: failure()
