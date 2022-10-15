@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Declare Date
         id: set-date
-        run: echo "::set-output name=date::$(date +'%Y%m%d')"
+        run: echo "date=$(date +'%Y%m%d')" >> ${GITHUB_OUTPUT}
 
       - name: Declare keepalived Versions
         id: set-keepalived-versions
@@ -60,12 +60,12 @@ jobs:
           
           LATEST_VER=$(echo ${VERS} | rev | cut -d' ' -f1 | rev)
           echo "Latest: ${LATEST_VER}"
-          echo "::set-output name=latest-version::${LATEST_VER}"
+          echo "latest-version=${LATEST_VER}" >> ${GITHUB_OUTPUT}
           
           VERS_MATRIX_LIST=$(echo ${VERS} | sed -z 's/ /","/g;s/,$/\n/')
           VERS_MATRIX_LIST="[\"${VERS_MATRIX_LIST}\"]"
           echo ${VERS_MATRIX_LIST}
-          echo "::set-output name=versions::${VERS_MATRIX_LIST}"
+          echo "versions=${VERS_MATRIX_LIST}" >> ${GITHUB_OUTPUT}
 
   Publish:
     runs-on: ubuntu-latest
