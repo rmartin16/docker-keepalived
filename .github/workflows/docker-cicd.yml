@@ -1,8 +1,8 @@
 name: Docker CI/CD
 
 on:
-  schedule:
-    - cron: '16 4 * * WED'
+  #schedule:
+    #- cron: '16 4 * * WED'
     #- cron: '0,15,30,45 * * * *'
   push:
     branches:
@@ -12,13 +12,14 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+  workflow_call:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: rmartin16/keepalived
   BUILD_TARGETS: linux/amd64,linux/386,linux/arm64/v8,linux/arm/v7,linux/arm/v6
   FORCE_PUBLISH: false
-  #FORCE_PUBLISH: true
 
 jobs:
 
