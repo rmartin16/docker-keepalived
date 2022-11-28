@@ -1,0 +1,48 @@
+name: Check Base Image Update
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: rmartin16/keepalived
+
+jobs:
+
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      update-available: ${{ steps.base-image-check.outputs.update-available }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Check for Base Image Update
+        id: base-image-check
+        run: |
+
+          REPO="rmartin16/keepalived"
+          GHCR_TOKEN=$(curl -s -u 'username:${{ secrets.PAT }}' 'https://ghcr.io/token?service=ghcr.io&scope=repository:${REPO}:pull' | jq -r '.token')
+          IMAGE_DIGEST=$(curl -s -H "Authorization: Bearer ${GHCR_TOKEN}" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" https://ghcr.io/v2/${REPO}/manifests/latest | jq -r '.manifests[].digest' | head -n1)
+          BASE_IMAGE_DIGEST=$(curl -s -H "Authorization: Bearer ${GHCR_TOKEN}" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" https://ghcr.io/v2/${REPO}/manifests/${IMAGE_DIGEST} | jq -r '.layers[].digest' | head -n1)
+
+          ALPINE_REPO='library/alpine'
+          ALPINE_TAG=$(head -n1 Dockerfile | awk -F: '{print $2}' | awk -F' ' '{print $1}')
+          DOCKER_TOKEN=$(curl -s 'https://auth.docker.io/token?service=registry.docker.io&scope=repository:'${ALPINE_REPO}':pull'| jq -r '.token')
+          ALPINE_DIGEST=$(curl -s -H "Authorization: Bearer ${DOCKER_TOKEN}" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "https://index.docker.io/v2/${ALPINE_REPO}/manifests/${ALPINE_TAG}" | jq -r '.layers[].digest')
+
+          echo BASE_IMAGE_DIGEST=${BASE_IMAGE_DIGEST}
+          echo ALPINE_DIGEST=${ALPINE_DIGEST}
+
+          echo "update-available=false" >> ${GITHUB_OUTPUT}
+          if [[ "${BASE_IMAGE_DIGEST}" == "${ALPINE_DIGEST}" ]]; then
+            echo "update-available=true" >> ${GITHUB_OUTPUT}
+          fi
+
+  update:
+    needs: check
+    if: needs.check.outputs.update-available == 'true'
+    uses: ./.github/workflows/docker-cicd.yml
