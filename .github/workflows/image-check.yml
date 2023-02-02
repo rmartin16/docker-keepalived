@@ -43,7 +43,7 @@ jobs:
             echo "update-available=true" >> ${GITHUB_OUTPUT}
           fi
 
-  update:
+  cicd:
     needs: check
-    if: (needs.check.outputs.update-available == 'true') && (github.event_name != 'pull_request')
+    if: (needs.check.outputs.update-available == 'true') || (github.event_name == 'pull_request')
     uses: ./.github/workflows/docker-cicd.yml
