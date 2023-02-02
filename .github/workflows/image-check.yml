@@ -25,8 +25,8 @@ jobs:
         run: |
           REPO="rmartin16/keepalived"
           GHCR_TOKEN=$(curl -s -u "${{ github.repository_owner }}:${{ secrets.GITHUB_TOKEN }}" "https://ghcr.io/token?service=ghcr.io&scope=repository:${REPO}:pull" | jq -r '.token')
-          IMAGE_DIGEST=$(curl -s -H "Authorization: Bearer ${GHCR_TOKEN}" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" https://ghcr.io/v2/${REPO}/manifests/latest | jq -r '.manifests[].digest' | head -n1)
-          BASE_IMAGE_DIGEST=$(curl -s -H "Authorization: Bearer ${GHCR_TOKEN}" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" https://ghcr.io/v2/${REPO}/manifests/${IMAGE_DIGEST} | jq -r '.layers[].digest' | head -n1)
+          IMAGE_DIGEST=$(curl -s -H "Authorization: Bearer ${GHCR_TOKEN}" -H "Accept: application/vnd.oci.image.index.v1+json" https://ghcr.io/v2/${REPO}/manifests/latest | jq -r '.manifests[].digest' | head -n1)
+          BASE_IMAGE_DIGEST=$(curl -s -H "Authorization: Bearer ${GHCR_TOKEN}" -H "Accept: application/vnd.oci.image.manifest.v1+json" https://ghcr.io/v2/${REPO}/manifests/${IMAGE_DIGEST} | jq -r '.layers[].digest' | head -n1)
 
           ALPINE_REPO="library/alpine"
           ALPINE_TAG=$(head -n1 Dockerfile | awk -F: '{print $2}' | awk -F' ' '{print $1}')
