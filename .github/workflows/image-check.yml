@@ -3,6 +3,7 @@ name: Check Base Image Update
 on:
   schedule:
     - cron: '20 4 * * *'
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -44,5 +45,5 @@ jobs:
 
   update:
     needs: check
-    if: needs.check.outputs.update-available == 'true'
+    if: (needs.check.outputs.update-available == 'true') && (github.event_name != 'pull_request')
     uses: ./.github/workflows/docker-cicd.yml
