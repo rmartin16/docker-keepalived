@@ -14,6 +14,8 @@ RUN apk --update-cache add \
        ipset-dev \
        iptables \
        iptables-dev \
+       libip6tc \
+       libip4tc \
        libmnl-dev \
        libnftnl-dev \
        libnl3 \
@@ -59,6 +61,8 @@ RUN apk --no-cache add \
        file \
        ipset \
        iptables \
+       libip6tc \
+       libip4tc \
        libmagic \
        libnl3 \
        libgcc \
