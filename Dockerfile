@@ -1,4 +1,4 @@
-FROM alpine:3.20.1 AS builder
+FROM alpine:3.20.2 AS builder
 LABEL maintainer = "Russell Martin - github/rmartin16/docker-keepalived"
 LABEL description = "multiarch keepalived"
 
@@ -56,7 +56,7 @@ RUN ./build_setup && \
     make && make install && \
     strip /usr/sbin/keepalived
 
-FROM alpine:3.20.1
+FROM alpine:3.20.2
 RUN apk --no-cache add \
        file \
        ipset \
