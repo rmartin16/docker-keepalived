@@ -1,10 +1,11 @@
 FROM alpine:3.20.3 AS builder
-LABEL maintainer = "Russell Martin - github/rmartin16/docker-keepalived"
-LABEL description = "multiarch keepalived"
+LABEL maintainer="Russell Martin - github/rmartin16/docker-keepalived"
+LABEL description="multiarch keepalived"
 
 RUN apk --update-cache add \
        autoconf \
        automake \
+       bash \
        binutils \
        curl \
        file \
@@ -20,6 +21,7 @@ RUN apk --update-cache add \
        libnftnl-dev \
        libnl3 \
        libnl3-dev \
+       linux-headers \
        make \
        musl-dev \
        net-snmp-dev \
@@ -28,14 +30,15 @@ RUN apk --update-cache add \
        pcre2 \
        pcre2-dev
 
-ARG KEEPALIVED_VERSION=2.2.7
+ARG KEEPALIVED_VERSION=2.3.2
 RUN curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz && \
     mkdir -p /build/keepalived && \
     tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived
 
 WORKDIR /build/keepalived
-RUN ./build_setup && \
-    ./configure \
+RUN sed -i 's/#include <linux\/if_ether.h>//' keepalived/vrrp/vrrp.c && \
+    ./build_setup && \
+    /bin/bash ./configure \
       MKDIR_P='/bin/mkdir -p' \
       --disable-dynamic-linking \
       --disable-dependency-tracking \
