@@ -89,4 +89,8 @@ ENV INTERFACE="eth0" \
     PASSWORD="KeptAliv" \
     NOTIFY="/notify.sh"
 
+# workaround for https://github.com/acassen/keepalived/issues/2503
+RUN mkdir -p /usr/share/iproute2/rt_addrprotos.d
+RUN mkdir -p /etc/iproute2/rt_addrprotos.d
+
 CMD ["/bin/sh", "-x", "entrypoint.sh"]
