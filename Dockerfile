@@ -1,4 +1,4 @@
-FROM alpine:3.20.3 AS builder
+FROM alpine:3.21.0 AS builder
 LABEL maintainer="Russell Martin - github/rmartin16/docker-keepalived"
 LABEL description="multiarch keepalived"
 
@@ -59,7 +59,7 @@ RUN sed -i 's/#include <linux\/if_ether.h>//' keepalived/vrrp/vrrp.c && \
     make && make install && \
     strip /usr/sbin/keepalived
 
-FROM alpine:3.20.3
+FROM alpine:3.21.0
 RUN apk --no-cache add \
        file \
        ipset \
