@@ -36,9 +36,10 @@ RUN curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-$
     tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived
 
 WORKDIR /build/keepalived
-RUN sed -i 's/#include <linux\/if_ether.h>//' keepalived/vrrp/vrrp.c && \
-    ./build_setup && \
-    /bin/bash ./configure \
+ENV CFLAGS="-Wno-incompatible-pointer-types"
+RUN sed -i 's/#include <linux\/if_ether.h>//' keepalived/vrrp/vrrp.c
+RUN ./build_setup
+RUN /bin/bash ./configure \
       MKDIR_P='/bin/mkdir -p' \
       --disable-dynamic-linking \
       --disable-dependency-tracking \
@@ -55,9 +56,10 @@ RUN sed -i 's/#include <linux\/if_ether.h>//' keepalived/vrrp/vrrp.c && \
       --sysconfdir=/etc \
       --datadir=/usr/share \
       --localstatedir=/var \
-      --mandir=/usr/share/man && \
-    make && make install && \
-    strip /usr/sbin/keepalived
+      --mandir=/usr/share/man
+RUN make
+RUN make install
+RUN strip /usr/sbin/keepalived
 
 FROM alpine:3.21.0
 RUN apk --no-cache add \
@@ -73,7 +75,10 @@ RUN apk --no-cache add \
        openssl \
        pcre2 && \
     addgroup -S keepalived_script && \
-    adduser -D -S -G keepalived_script keepalived_script
+    adduser -D -S -G keepalived_script keepalived_script && \
+    # workaround for https://github.com/acassen/keepalived/issues/2503
+    mkdir -p /usr/share/iproute2/rt_addrprotos.d && \
+    mkdir -p /etc/iproute2/rt_addrprotos.d
 
 COPY --from=builder /usr/sbin/keepalived /usr/sbin/keepalived
 COPY assets/keepalived.conf /etc/keepalived/keepalived.conf
@@ -88,9 +93,5 @@ ENV INTERFACE="eth0" \
     VIRTUAL_IPS="192.168.2.100/24" \
     PASSWORD="KeptAliv" \
     NOTIFY="/notify.sh"
-
-# workaround for https://github.com/acassen/keepalived/issues/2503
-RUN mkdir -p /usr/share/iproute2/rt_addrprotos.d
-RUN mkdir -p /etc/iproute2/rt_addrprotos.d
 
 CMD ["/bin/sh", "-x", "entrypoint.sh"]
