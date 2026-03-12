@@ -139,7 +139,7 @@ jobs:
 
       - name: Send mail
         if: failure()
-        uses: dawidd6/action-send-mail@v11
+        uses: dawidd6/action-send-mail@v13
         with:
           server_address: smtp.gmail.com
           server_port: 587
