@@ -36,7 +36,7 @@ RUN curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-$
     tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived
 
 WORKDIR /build/keepalived
-ENV CFLAGS="-Wno-incompatible-pointer-types"
+ENV CFLAGS="-Wno-incompatible-pointer-types -Wno-error=declaration-after-statement"
 RUN sed -i 's/#include <linux\/if_ether.h>//' keepalived/vrrp/vrrp.c
 RUN ./build_setup
 RUN /bin/bash ./configure \
