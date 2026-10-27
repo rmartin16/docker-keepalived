@@ -15,7 +15,7 @@ trap 'rm -f "$LOG"' EXIT
 FAILURES=0
 
 run_image() {
-  docker run ${PLATFORM:+--platform "$PLATFORM"} "$@"
+  docker run --pull never ${PLATFORM:+--platform "$PLATFORM"} "$@"
 }
 
 pass() { echo "PASS: $1"; }
@@ -30,8 +30,8 @@ fail() {
 # with SIGTERM whenever a notify script is configured, although the daemon runs
 # notify scripts fine (see tests/verify_failover.sh), so on that version the
 # notify directive is left out of the test.
-KEEPALIVED_VERSION="$(run_image --rm "$IMAGE" /usr/sbin/keepalived --version 2>&1 \
-  | sed -n 's/^Keepalived v\([0-9.]*\).*/\1/p')"
+VERSION_OUTPUT="$(run_image --rm "$IMAGE" /usr/sbin/keepalived --version 2>&1)"
+KEEPALIVED_VERSION="$(sed -n 's/^Keepalived v\([0-9.]*\).*/\1/p' <<<"$VERSION_OUTPUT")"
 if [ "$KEEPALIVED_VERSION" = "2.2.7" ]; then
   CONFIG_TEST_FN='config_test() {
     grep -v notify "$1" >/tmp/config-test.conf &&
@@ -92,7 +92,11 @@ else
 fi
 
 # the container's own address is dropped from the peer list
-if out=$(render 'export UNICAST_PEERS="10.10.0.11 $(hostname -i) 10.10.0.13"'); then
+if out=$(render '
+  own=$(hostname -i)
+  [ -n "$own" ] || { echo "hostname -i returned no address" >&2; exit 1; }
+  export UNICAST_PEERS="10.10.0.11 $own 10.10.0.13"
+'); then
   peers=$(sed -n '/unicast_peer {/,/}/p' <<<"$out")
   if grep -q '10\.10\.0\.11' <<<"$peers" && grep -q '10\.10\.0\.13' <<<"$peers" \
     && [ "$(grep -c '^    [0-9]' <<<"$peers")" -eq 2 ]; then
@@ -147,9 +151,26 @@ else
   fail "notify.sh rejects unknown state"
 fi
 
+# enable_script_security refuses scripts that a non-root user could change, so
+# the files the image ships must be owned by root
+if out=$(run_image --rm "$IMAGE" stat -c '%U:%G %a %n' \
+  /entrypoint.sh /notify.sh /etc/keepalived/keepalived.conf /usr/sbin/keepalived \
+  2>&1); then
+  echo "$out" >"$LOG"
+  if [ "$(grep -vc '^root:root ' <<<"$out")" -eq 0 ] \
+    && grep -q '^root:root 755 /usr/sbin/keepalived$' <<<"$out"; then
+    pass "image files are owned by root"
+  else
+    fail "image files are owned by root"
+  fi
+else
+  echo "$out" >"$LOG"
+  fail "image files are owned by root"
+fi
+
 # keepalived reports the features it was built with; this guards against
 # configure silently dropping one when a build dependency is missing
-run_image --rm "$IMAGE" /usr/sbin/keepalived --version >"$LOG" 2>&1
+echo "$VERSION_OUTPUT" >"$LOG"
 for opt in NFTABLES REGEX JSON BFD SNMP_VRRP SNMP_CHECKER SNMP_RFCV2 SNMP_RFCV3; do
   if grep -qE "^Config options:.*\b${opt}\b" "$LOG"; then
     pass "keepalived built with $opt"
@@ -158,22 +179,52 @@ for opt in NFTABLES REGEX JSON BFD SNMP_VRRP SNMP_CHECKER SNMP_RFCV2 SNMP_RFCV3;
   fi
 done
 
-# the image starts as documented, with its default command and environment
-CONTAINER="$(run_image --detach "$IMAGE")"
+# the image starts as documented, with its default command and environment;
+# with no peers answering it becomes master and adds the default VIP. Under
+# QEMU user-mode emulation keepalived cannot set the socket options VRRP needs
+# (IP_MULTICAST_ALL, IP_FREEBIND) and enters FAULT instead, so there the test
+# only checks that keepalived starts and stays up.
+case "$(uname -m):$(docker image inspect --format '{{.Architecture}}' "$IMAGE")" in
+  x86_64:amd64 | x86_64:386 | aarch64:arm64 | aarch64:arm) EMULATED="" ;;
+  *) EMULATED=1 ;;
+esac
+CONTAINER="$(run_image --detach --cap-add NET_ADMIN "$IMAGE")"
 trap 'docker rm -f "$CONTAINER" >/dev/null; rm -f "$LOG"' EXIT
-# emulated architectures start slowly, so wait for keepalived before checking
-# that it stays up
-for _ in $(seq 10); do
-  docker exec "$CONTAINER" pidof keepalived >/dev/null 2>&1 && break
+# emulated architectures start slowly, so wait for keepalived to enter its
+# first state before checking that it stays up
+for _ in $(seq 30); do
+  docker logs "$CONTAINER" 2>&1 | grep -qE 'Entering (MASTER|BACKUP|FAULT) STATE' && break
   sleep 1
 done
 sleep 2
+docker logs "$CONTAINER" >"$LOG" 2>&1
 if [ "$(docker inspect --format '{{.State.Running}}' "$CONTAINER")" = "true" ] \
-  && docker exec "$CONTAINER" pidof keepalived >"$LOG" 2>&1; then
+  && docker exec "$CONTAINER" pidof keepalived >/dev/null 2>&1; then
   pass "default container keeps keepalived running"
 else
-  docker logs "$CONTAINER" >"$LOG" 2>&1
   fail "default container keeps keepalived running"
+fi
+if [ -n "$EMULATED" ]; then
+  echo "SKIP: default container becomes master and holds the default VIP (emulated)"
+else
+  # with no peers it becomes master about 3 advert intervals after BACKUP
+  for _ in $(seq 10); do
+    grep -q 'Entering MASTER STATE' "$LOG" && break
+    sleep 1
+    docker logs "$CONTAINER" >"$LOG" 2>&1
+  done
+  if grep -q 'Entering MASTER STATE' "$LOG"; then
+    pass "default container becomes master"
+  else
+    fail "default container becomes master"
+  fi
+  if docker exec "$CONTAINER" ip -4 addr show eth0 2>"$LOG" \
+    | grep -q 'inet 192\.168\.2\.100/24'; then
+    pass "default container holds the default VIP"
+  else
+    docker exec "$CONTAINER" ip -4 addr show eth0 >>"$LOG" 2>&1
+    fail "default container holds the default VIP"
+  fi
 fi
 if docker exec "$CONTAINER" sh -c "
   ${CONFIG_TEST_FN}

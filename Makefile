@@ -5,7 +5,8 @@ VERSION := $(shell cat Dockerfile | grep -oP 'KEEPALIVED_VERSION=(.*)' | grep -o
 build:
 	docker build --no-cache -t $(DOCKER_NAME) .
 
-test: test-image test-failover
+test: build
+	$(MAKE) test-image test-failover
 
 test-image:
 	bash tests/verify_image.sh
