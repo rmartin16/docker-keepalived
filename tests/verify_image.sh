@@ -15,7 +15,7 @@ trap 'rm -f "$LOG"' EXIT
 FAILURES=0
 
 run_image() {
-  docker run ${PLATFORM:+--platform "$PLATFORM"} "$@"
+  docker run --pull never ${PLATFORM:+--platform "$PLATFORM"} "$@"
 }
 
 pass() { echo "PASS: $1"; }

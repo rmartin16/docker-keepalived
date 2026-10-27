@@ -1,16 +1,14 @@
 #!/bin/bash
 
 # Runs two keepalived containers as VRRP peers on a private Docker network and
-# verifies that the higher priority node takes the virtual IP, that the other
-# node takes it over when the master stops, and that keepalived runs the notify
-# script on each transition.
+# verifies that the first node takes the virtual IP, that the second node stays
+# backup until the master stops and then takes it over, and that keepalived
+# runs the notify script on each transition.
 
 set -u
 
 IMAGE="${IMAGE:-rmartin16/keepalived}"
 NAME="keepalived-failover-$$"
-SUBNET_PREFIX="172.30.99"
-VIP="${SUBNET_PREFIX}.100"
 TIMEOUT=20
 FAILURES=0
 
@@ -35,7 +33,7 @@ fail() {
 # enable_script_security requires; it runs as keepalived_script and logs each
 # transition (keepalived appends the priority) to /tmp/notify.log.
 start_node() {
-  docker run --detach \
+  docker run --pull never --detach \
     --name "${NAME}-$1" \
     --network "$NAME" \
     --ip "${SUBNET_PREFIX}.1$1" \
@@ -73,12 +71,27 @@ wait_for() {
   return 1
 }
 
-docker network create --subnet "${SUBNET_PREFIX}.0/24" "$NAME" >/dev/null || exit 1
-start_node 1 150
-start_node 2 100
+# A random /24 so the network does not collide with others on the host or with
+# a concurrent run; try another if Docker reports an overlap.
+for _ in $(seq 10); do
+  SUBNET_PREFIX="10.$((RANDOM % 256)).$((RANDOM % 256))"
+  docker network create --subnet "${SUBNET_PREFIX}.0/24" "$NAME" >/dev/null 2>&1 && break
+  SUBNET_PREFIX=""
+done
+if [ -z "$SUBNET_PREFIX" ]; then
+  echo "FAIL: could not create a Docker network for the test"
+  exit 1
+fi
+VIP="${SUBNET_PREFIX}.100"
 
-wait_for "node 1 becomes master and holds the VIP" has_vip 1
+# nopreempt with both nodes in BACKUP means whichever node's master-down timer
+# expires first wins the first election, so node 2 starts only once node 1 is
+# master.
+start_node 1 150 || { echo "FAIL: could not start node 1"; exit 1; }
+
+wait_for "node 1 becomes master and holds the VIP" has_vip 1 || exit 1
 wait_for "node 1 runs notify for MASTER" notified 1 MASTER
+start_node 2 100 || { echo "FAIL: could not start node 2"; exit 1; }
 wait_for "node 2 runs notify for BACKUP" notified 2 BACKUP
 if has_vip 2; then
   fail "node 2 does not hold the VIP while backup"
