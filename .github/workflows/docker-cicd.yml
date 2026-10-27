@@ -27,8 +27,7 @@ jobs:
 
   # Decide whether the image needs building. Scheduled runs only build
   # unpublished releases; manual runs and tag pushes build everything; pushes
-  # and PRs only build when an image input changed. PRs never publish, so they
-  # build a representative sample instead of every version.
+  # and PRs only build when an image input changed.
   Changes:
     runs-on: ubuntu-latest
     permissions:
@@ -90,10 +89,7 @@ jobs:
           echo "Latest: ${LATEST_VER}"
           echo "latest-version=${LATEST_VER}" >> ${GITHUB_OUTPUT}
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # the latest release of each minor series
-            VERS=$(printf '%s\n' ${VERS} | awk -F. '{ last[$1"."$2] = $0 } END { for (s in last) print last[s] }' | sort -V)
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ]; then
             # the image is public, so an anonymous pull token can list its tags
             TOKEN=$(curl -fsS "https://${REGISTRY}/token?scope=repository:${IMAGE_NAME}:pull" | jq -r .token)
             PUBLISHED=$(curl -fsS -H "Authorization: Bearer ${TOKEN}" "https://${REGISTRY}/v2/${IMAGE_NAME}/tags/list?n=10000" | jq -r '.tags[]')
