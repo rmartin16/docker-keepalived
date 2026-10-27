@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Source: https://docs.oracle.com/cd/E37670_01/E41138/html/section_hxz_zdw_pr.html
 
