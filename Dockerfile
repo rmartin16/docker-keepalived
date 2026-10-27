@@ -1,4 +1,4 @@
-FROM alpine:3.24.2 AS builder
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS builder
 LABEL maintainer="Russell Martin - github/rmartin16/docker-keepalived"
 LABEL description="multiarch keepalived"
 
@@ -31,7 +31,7 @@ RUN apk --update-cache add \
        pcre2-dev
 
 ARG KEEPALIVED_VERSION=2.3.2
-RUN curl -s -o keepalived.tar.gz -SL http://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz && \
+RUN curl -sSfL -o keepalived.tar.gz https://keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz && \
     mkdir -p /build/keepalived && \
     tar -xzf keepalived.tar.gz --strip 1 -C /build/keepalived
 
@@ -61,7 +61,7 @@ RUN make
 RUN make install
 RUN strip /usr/sbin/keepalived
 
-FROM alpine:3.24.2
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 RUN apk --no-cache add \
        file \
        ipset \
