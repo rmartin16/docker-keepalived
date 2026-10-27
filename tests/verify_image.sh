@@ -7,10 +7,16 @@
 set -u
 
 IMAGE="${IMAGE:-rmartin16/keepalived}"
+# set to run an image built for another architecture, e.g. linux/arm64
+PLATFORM="${PLATFORM:-}"
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
 FAILURES=0
+
+run_image() {
+  docker run ${PLATFORM:+--platform "$PLATFORM"} "$@"
+}
 
 pass() { echo "PASS: $1"; }
 fail() {
@@ -26,7 +32,7 @@ fail() {
 render() {
   local setup="$1"
   shift
-  docker run --rm "$@" --env ARGUMENTS="--config-test" "$IMAGE" sh -c "
+  run_image --rm "$@" --env ARGUMENTS="--config-test" "$IMAGE" sh -c "
     ${setup}
     sh /entrypoint.sh >&2
     rc=\$?
@@ -109,13 +115,13 @@ fi
 
 # notify.sh runs in the image and accepts only known VRRP states
 for state in MASTER BACKUP FAULT; do
-  if docker run --rm "$IMAGE" /notify.sh INSTANCE VI "$state" >"$LOG" 2>&1; then
+  if run_image --rm "$IMAGE" /notify.sh INSTANCE VI "$state" >"$LOG" 2>&1; then
     pass "notify.sh accepts $state"
   else
     fail "notify.sh accepts $state"
   fi
 done
-if ! docker run --rm "$IMAGE" /notify.sh INSTANCE VI BOGUS >"$LOG" 2>&1 \
+if ! run_image --rm "$IMAGE" /notify.sh INSTANCE VI BOGUS >"$LOG" 2>&1 \
   && grep -q 'Unknown state BOGUS' "$LOG"; then
   pass "notify.sh rejects unknown state"
 else
@@ -124,7 +130,7 @@ fi
 
 # keepalived reports the features it was built with; this guards against
 # configure silently dropping one when a build dependency is missing
-docker run --rm "$IMAGE" /usr/sbin/keepalived --version >"$LOG" 2>&1
+run_image --rm "$IMAGE" /usr/sbin/keepalived --version >"$LOG" 2>&1
 for opt in NFTABLES REGEX JSON BFD SNMP_VRRP SNMP_CHECKER SNMP_RFCV2 SNMP_RFCV3; do
   if grep -qE "^Config options:.*\b${opt}\b" "$LOG"; then
     pass "keepalived built with $opt"
@@ -134,8 +140,14 @@ for opt in NFTABLES REGEX JSON BFD SNMP_VRRP SNMP_CHECKER SNMP_RFCV2 SNMP_RFCV3;
 done
 
 # the image starts as documented, with its default command and environment
-CONTAINER="$(docker run --detach "$IMAGE")"
+CONTAINER="$(run_image --detach "$IMAGE")"
 trap 'docker rm -f "$CONTAINER" >/dev/null; rm -f "$LOG"' EXIT
+# emulated architectures start slowly, so wait for keepalived before checking
+# that it stays up
+for _ in $(seq 10); do
+  docker exec "$CONTAINER" pidof keepalived >/dev/null 2>&1 && break
+  sleep 1
+done
 sleep 2
 if [ "$(docker inspect --format '{{.State.Running}}' "$CONTAINER")" = "true" ] \
   && docker exec "$CONTAINER" pidof keepalived >"$LOG" 2>&1; then

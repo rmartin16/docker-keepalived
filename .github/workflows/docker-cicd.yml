@@ -104,27 +104,18 @@ jobs:
           echo ${VERS_MATRIX_LIST}
           echo "versions=${VERS_MATRIX_LIST}" >> ${GITHUB_OUTPUT}
 
-  Tests:
+  # Each version is built and tested for amd64 (plus image tests for arm64
+  # under QEMU) before the multi-arch build reuses those cached layers and
+  # pushes; a version whose tests fail is never published.
+  Build:
+    name: Build, test, publish (${{ matrix.VERSION }})
     runs-on: ubuntu-latest
     needs: [Setup]
     if: needs.Setup.outputs.versions != '[]'
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Build
-        run: make build
-      - name: Test image
-        run: make test-image
-      - name: Test failover
-        run: make test-failover
-
-  Publish:
-    runs-on: ubuntu-latest
-    needs: [Setup,Tests]
     permissions:
       contents: read
       packages: write
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -166,6 +157,40 @@ jobs:
             type=raw,value=v${{ matrix.VERSION }}-${{ needs.Setup.outputs.date }}
             type=raw,value=latest,enable=${{ matrix.VERSION == needs.Setup.outputs.latest-version }}
             type=ref,event=pr
+
+      - name: Build amd64 image for testing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: keepalived:test-amd64
+          platforms: linux/amd64
+          build-args: KEEPALIVED_VERSION=${{ matrix.VERSION }}
+
+      - name: Test amd64 image
+        run: make test-image
+        env:
+          IMAGE: keepalived:test-amd64
+
+      - name: Test failover
+        run: make test-failover
+        env:
+          IMAGE: keepalived:test-amd64
+
+      - name: Build arm64 image for testing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: keepalived:test-arm64
+          platforms: linux/arm64/v8
+          build-args: KEEPALIVED_VERSION=${{ matrix.VERSION }}
+
+      - name: Test arm64 image
+        run: make test-image
+        env:
+          IMAGE: keepalived:test-arm64
+          PLATFORM: linux/arm64/v8
 
       - name: Build and push Docker image
         id: build-and-push
