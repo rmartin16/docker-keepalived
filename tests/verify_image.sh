@@ -180,30 +180,51 @@ for opt in NFTABLES REGEX JSON BFD SNMP_VRRP SNMP_CHECKER SNMP_RFCV2 SNMP_RFCV3;
 done
 
 # the image starts as documented, with its default command and environment;
-# with no peers answering it becomes master and adds the default VIP, so wait
-# for that transition (emulated architectures start slowly) before checking
-# that keepalived stays up
+# with no peers answering it becomes master and adds the default VIP. Under
+# QEMU user-mode emulation keepalived cannot set the socket options VRRP needs
+# (IP_MULTICAST_ALL, IP_FREEBIND) and enters FAULT instead, so there the test
+# only checks that keepalived starts and stays up.
+case "$(uname -m):$(docker image inspect --format '{{.Architecture}}' "$IMAGE")" in
+  x86_64:amd64 | x86_64:386 | aarch64:arm64 | aarch64:arm) EMULATED="" ;;
+  *) EMULATED=1 ;;
+esac
 CONTAINER="$(run_image --detach --cap-add NET_ADMIN "$IMAGE")"
 trap 'docker rm -f "$CONTAINER" >/dev/null; rm -f "$LOG"' EXIT
+# emulated architectures start slowly, so wait for keepalived to enter its
+# first state before checking that it stays up
 for _ in $(seq 30); do
-  docker logs "$CONTAINER" 2>&1 | grep -q 'Entering MASTER STATE' && break
+  docker logs "$CONTAINER" 2>&1 | grep -qE 'Entering (MASTER|BACKUP|FAULT) STATE' && break
   sleep 1
 done
 sleep 2
 docker logs "$CONTAINER" >"$LOG" 2>&1
-if grep -q 'Entering MASTER STATE' "$LOG" \
-  && [ "$(docker inspect --format '{{.State.Running}}' "$CONTAINER")" = "true" ] \
+if [ "$(docker inspect --format '{{.State.Running}}' "$CONTAINER")" = "true" ] \
   && docker exec "$CONTAINER" pidof keepalived >/dev/null 2>&1; then
-  pass "default container becomes master and keeps keepalived running"
+  pass "default container keeps keepalived running"
 else
-  fail "default container becomes master and keeps keepalived running"
+  fail "default container keeps keepalived running"
 fi
-if docker exec "$CONTAINER" ip -4 addr show eth0 2>"$LOG" \
-  | grep -q 'inet 192\.168\.2\.100/24'; then
-  pass "default container holds the default VIP"
+if [ -n "$EMULATED" ]; then
+  echo "SKIP: default container becomes master and holds the default VIP (emulated)"
 else
-  docker exec "$CONTAINER" ip -4 addr show eth0 >>"$LOG" 2>&1
-  fail "default container holds the default VIP"
+  # with no peers it becomes master about 3 advert intervals after BACKUP
+  for _ in $(seq 10); do
+    grep -q 'Entering MASTER STATE' "$LOG" && break
+    sleep 1
+    docker logs "$CONTAINER" >"$LOG" 2>&1
+  done
+  if grep -q 'Entering MASTER STATE' "$LOG"; then
+    pass "default container becomes master"
+  else
+    fail "default container becomes master"
+  fi
+  if docker exec "$CONTAINER" ip -4 addr show eth0 2>"$LOG" \
+    | grep -q 'inet 192\.168\.2\.100/24'; then
+    pass "default container holds the default VIP"
+  else
+    docker exec "$CONTAINER" ip -4 addr show eth0 >>"$LOG" 2>&1
+    fail "default container holds the default VIP"
+  fi
 fi
 if docker exec "$CONTAINER" sh -c "
   ${CONFIG_TEST_FN}
