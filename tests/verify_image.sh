@@ -25,19 +25,38 @@ fail() {
   FAILURES=$((FAILURES + 1))
 }
 
+# config_test <config>, defined inside the container: validates a config with
+# keepalived's own config test. keepalived 2.2.7's config test kills itself
+# with SIGTERM whenever a notify script is configured, although the daemon runs
+# notify scripts fine (see tests/verify_failover.sh), so on that version the
+# notify directive is left out of the test.
+KEEPALIVED_VERSION="$(run_image --rm "$IMAGE" /usr/sbin/keepalived --version 2>&1 \
+  | sed -n 's/^Keepalived v\([0-9.]*\).*/\1/p')"
+if [ "$KEEPALIVED_VERSION" = "2.2.7" ]; then
+  CONFIG_TEST_FN='config_test() {
+    grep -v notify "$1" >/tmp/config-test.conf &&
+      /usr/sbin/keepalived --config-test -f /tmp/config-test.conf
+  }'
+else
+  CONFIG_TEST_FN='config_test() { /usr/sbin/keepalived --config-test -f "$1"; }'
+fi
+
 # render <setup shell> [docker run args...]
-# Runs the entrypoint with keepalived in config-test mode and prints the
-# rendered config; keepalived's output goes to $LOG. The exit status is
-# keepalived's.
+# Runs the entrypoint, prints the rendered config and then validates it with
+# config_test, whose output goes to $LOG (as does the entrypoint's, if it
+# fails). The exit status is the entrypoint's if it fails, otherwise the config
+# test's.
 render() {
   local setup="$1"
   shift
-  run_image --rm "$@" --env ARGUMENTS="--config-test" "$IMAGE" sh -c "
+  run_image --rm "$@" "$IMAGE" sh -c "
+    ${CONFIG_TEST_FN}
     ${setup}
-    sh /entrypoint.sh >&2
-    rc=\$?
-    cat \${CONFIG:-/etc/keepalived/keepalived.conf}
-    exit \$rc
+    ARGUMENTS=--version sh /entrypoint.sh >/tmp/entrypoint.log 2>&1 ||
+      { rc=\$?; cat /tmp/entrypoint.log >&2; exit \$rc; }
+    config=\${CONFIG:-/etc/keepalived/keepalived.conf}
+    cat \"\$config\"
+    config_test \"\$config\" >&2
   " 2>"$LOG"
 }
 
@@ -156,8 +175,10 @@ else
   docker logs "$CONTAINER" >"$LOG" 2>&1
   fail "default container keeps keepalived running"
 fi
-if docker exec "$CONTAINER" \
-  /usr/sbin/keepalived --config-test -f /etc/keepalived/keepalived.conf >"$LOG" 2>&1; then
+if docker exec "$CONTAINER" sh -c "
+  ${CONFIG_TEST_FN}
+  config_test /etc/keepalived/keepalived.conf
+" >"$LOG" 2>&1; then
   pass "config rendered in place passes config test"
 else
   fail "config rendered in place passes config test"

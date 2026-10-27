@@ -104,9 +104,11 @@ jobs:
           echo ${VERS_MATRIX_LIST}
           echo "versions=${VERS_MATRIX_LIST}" >> ${GITHUB_OUTPUT}
 
-  # Each version is built and tested for amd64 (plus image tests for arm64
-  # under QEMU) before the multi-arch build reuses those cached layers and
-  # pushes; a version whose tests fail is never published.
+  # Each version is built and tested for amd64 first, since that is quick;
+  # then every platform is built in parallel without pushing, the other
+  # platforms' images are loaded from that build's cache and tested under QEMU,
+  # and only then is the image pushed. A version whose tests fail is never
+  # published.
   Build:
     name: Build, test, publish (${{ matrix.VERSION }})
     runs-on: ubuntu-latest
@@ -177,20 +179,36 @@ jobs:
         env:
           IMAGE: keepalived:test-amd64
 
-      - name: Build arm64 image for testing
+      - name: Build all platforms
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          load: true
-          tags: keepalived:test-arm64
-          platforms: linux/arm64/v8
+          platforms: ${{ env.BUILD_TARGETS }}
           build-args: KEEPALIVED_VERSION=${{ matrix.VERSION }}
 
-      - name: Test arm64 image
-        run: make test-image
+      # each image loads from the cache of the build above and is tested
+      # under QEMU
+      - name: Test other platforms
         env:
-          IMAGE: keepalived:test-arm64
-          PLATFORM: linux/arm64/v8
+          VERSION: ${{ matrix.VERSION }}
+        run: |
+          FAILED=""
+          for PLATFORM in ${BUILD_TARGETS//,/ }; do
+            [ "${PLATFORM}" = "linux/amd64" ] && continue
+            echo "::group::${PLATFORM}"
+            IMAGE="keepalived:test-${PLATFORM//\//-}"
+            docker buildx build --quiet --load \
+              --platform "${PLATFORM}" \
+              --build-arg KEEPALIVED_VERSION="${VERSION}" \
+              --tag "${IMAGE}" . \
+              && IMAGE="${IMAGE}" PLATFORM="${PLATFORM}" make test-image \
+              || FAILED="${FAILED} ${PLATFORM}"
+            echo "::endgroup::"
+          done
+          if [ -n "${FAILED}" ]; then
+            echo "::error::Tests failed for${FAILED}"
+            exit 1
+          fi
 
       - name: Build and push Docker image
         id: build-and-push
